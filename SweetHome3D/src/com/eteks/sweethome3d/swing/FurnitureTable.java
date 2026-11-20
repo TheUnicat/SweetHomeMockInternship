@@ -750,8 +750,20 @@ public class FurnitureTable extends JTable implements View, Printable {
           return headerRendererLabel;
         }
       };
-    for (int columnIndex = 0, n = columnModel.getColumnCount(); columnIndex < n; columnIndex++) {
-      final TableColumn tableColumn = columnModel.getColumn(columnIndex);
+    List<TableColumn> printedColumns = new ArrayList<TableColumn>(Collections.list(columnModel.getColumns()));
+    if (columnModel instanceof FurnitureTableColumnModel) {
+      TableColumn levelColumn = ((FurnitureTableColumnModel)columnModel).getMissingLevelColumn();
+      if (levelColumn != null) {
+        int nameIndex = -1;
+        for (int i = 0; i < printedColumns.size(); i++) {
+          if (printedColumns.get(i).getIdentifier() == HomePieceOfFurniture.SortableProperty.NAME) {
+            nameIndex = i;
+          }
+        }
+        printedColumns.add(nameIndex + 1, levelColumn);
+      }
+    }
+    for (final TableColumn tableColumn : printedColumns) {
       // Create a printable column from existing table column
       TableColumn printableColumn = new TableColumn();
       printableColumn.setIdentifier(tableColumn.getIdentifier());
@@ -778,7 +790,8 @@ public class FurnitureTable extends JTable implements View, Printable {
       // Change printable column header renderer
       printableColumn.setHeaderRenderer(printableHeaderRenderer);
       printableColumnModel.addColumn(printableColumn);
-    }    
+    }
+
     return print(g, pageFormat, pageIndex, printableColumnModel, Color.BLACK);
   }
 
@@ -1009,8 +1022,10 @@ public class FurnitureTable extends JTable implements View, Printable {
    */
   private static class FurnitureTableColumnModel extends DefaultTableColumnModel {
     private Map<HomePieceOfFurniture.SortableProperty, TableColumn> availableColumns;
+    private final Home home;
 
     public FurnitureTableColumnModel(Home home, UserPreferences preferences) {
+      this.home = home;
       createAvailableColumns(home, preferences);
       addHomeListener(home);
       addLanguageListener(preferences);
@@ -1088,7 +1103,18 @@ public class FurnitureTable extends JTable implements View, Printable {
     }
     
     /**
-     * Updates displayed columns list from furniture visible properties. 
+     * Returns the level column if home has levels and this column isn't displayed, or <code>null</code>.
+     */
+    public TableColumn getMissingLevelColumn() {
+      TableColumn levelColumn = this.availableColumns.get(HomePieceOfFurniture.SortableProperty.LEVEL);
+      if (this.home.getLevels().isEmpty() || this.tableColumns.contains(levelColumn)) {
+        return null;
+      }
+      return levelColumn;
+    }
+
+    /**
+     * Updates displayed columns list from furniture visible properties.
      */
     private void updateModelColumns(List<HomePieceOfFurniture.SortableProperty> furnitureVisibleProperties) {
       // Remove columns not in furnitureVisibleProperties

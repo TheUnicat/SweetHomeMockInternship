@@ -2010,6 +2010,15 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
   public int print(Graphics g, PageFormat pageFormat, int pageIndex) {
     List<Selectable> printedItems = getPaintedItems(); 
     Rectangle2D printedItemBounds = getItemsBounds(g, printedItems);
+    List<Level> levels = new ArrayList<>();
+    for (Level level : home.getLevels()) {
+      if (level.isViewable()) {
+        levels.add(level);
+      }
+    }
+    if (levels.isEmpty()) {
+      levels.add(null);
+    }
     if (printedItemBounds != null) {
       double imageableX = pageFormat.getImageableX();
       double imageableY = pageFormat.getImageableY();
@@ -2020,12 +2029,14 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
       float columnIndex;
       int pagesPerRow;
       int pagesPerColumn;
+      Level printedLevel;
       if (this.home.getPrint() == null || this.home.getPrint().getPlanScale() == null) {
         // Compute a scale that ensures the plan will fill the component if plan scale is null
         printScale = getPrintPreferredScale(g, pageFormat) * LengthUnit.centimeterToInch(72);
-        if (pageIndex > 0) {
+        if (pageIndex >= levels.size()) {
           return NO_SUCH_PAGE;
         }
+        printedLevel = levels.get(pageIndex);
         pagesPerRow = 1;
         pagesPerColumn = 1;
         rowIndex   = 0;
@@ -2041,11 +2052,14 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
         if (printedItemBounds.getHeight() * printScale != imageableHeight) {
           pagesPerColumn++;
         }
-        if (pageIndex >= pagesPerRow * pagesPerColumn) {
+        int pagesPerLevel = pagesPerRow * pagesPerColumn;
+        if (pageIndex >= pagesPerLevel * levels.size()) {
           return NO_SUCH_PAGE;
         }
-        rowIndex = pageIndex / pagesPerRow;
-        columnIndex = pageIndex - rowIndex * pagesPerRow;
+        printedLevel = levels.get(pageIndex / pagesPerLevel);
+        int tileIndex = pageIndex % pagesPerLevel;
+        rowIndex = tileIndex / pagesPerRow;
+        columnIndex = tileIndex - rowIndex * pagesPerRow;
       }
           
       Graphics2D g2D = (Graphics2D)g.create();
@@ -2062,13 +2076,17 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
           Math.max(0, 
               (imageableHeight * pagesPerColumn / printScale - printedItemBounds.getHeight() - 2 * extraMargin) / 2));
       setRenderingHints(g2D);
+      Level oldSelectedLevel = this.home.getSelectedLevel();
       try {
         // Print component contents
+        this.home.setSelectedLevel(printedLevel);
         paintContent(g2D, printScale, PaintMode.PRINT);
       } catch (InterruptedIOException ex) {
-        // Ignore exception because it may happen only in EXPORT paint mode 
-      }   
-      g2D.dispose();
+        // Ignore exception because it may happen only in EXPORT paint mode
+      } finally {
+        this.home.setSelectedLevel(oldSelectedLevel);
+        g2D.dispose();
+      }
       return PAGE_EXISTS;
     } else {
       return NO_SUCH_PAGE;
